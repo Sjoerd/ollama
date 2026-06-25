@@ -504,15 +504,58 @@ if(OLLAMA_RUNNER_DIR)
         endif()
     endif()
     if(GGML_SYCL)
-        # Install the SYCL backend module. The Intel oneAPI runtime libraries it
-        # depends on (libsycl, libsvml, libimf, libintlc, oneMKL, ...) are bundled
-        # separately in the packaging step, mirroring how CUDA/ROCm runtime
-        # dependencies are handled above.
         if(TARGET ggml-sycl)
+            # Search paths for the Intel oneAPI runtime libraries. setvars.sh sets
+            # CMPLR_ROOT and MKLROOT; the lib layout varies slightly across oneAPI
+            # releases, so probe the common locations.
+            set(_oneapi_lib_dirs)
+            foreach(_root
+                    "$ENV{CMPLR_ROOT}"
+                    "$ENV{MKLROOT}"
+                    "$ENV{ONEAPI_ROOT}/compiler/latest"
+                    "$ENV{ONEAPI_ROOT}/mkl/latest")
+                if(_root)
+                    foreach(_sub lib lib/intel64 linux/lib "linux/compiler/lib/intel64_lin")
+                        if(IS_DIRECTORY "${_root}/${_sub}")
+                            list(APPEND _oneapi_lib_dirs "${_root}/${_sub}")
+                        endif()
+                    endforeach()
+                endif()
+            endforeach()
+            if(_oneapi_lib_dirs)
+                list(REMOVE_DUPLICATES _oneapi_lib_dirs)
+            endif()
+
+            # Install the SYCL backend module and bundle the Intel oneAPI runtime
+            # libraries it links against, mirroring the CUDA/ROCm blocks above. The
+            # Level-Zero loader (libze_loader) and OpenCL ICD loader are provided by
+            # the host GPU driver, so they are excluded.
             install(TARGETS ggml-sycl
+                RUNTIME_DEPENDENCIES
+                    DIRECTORIES ${_oneapi_lib_dirs}
+                    PRE_INCLUDE_REGEXES sycl svml imf intlc irng mkl tbb
+                    PRE_EXCLUDE_REGEXES ".*"
+                    POST_EXCLUDE_REGEXES "ze_loader" "libOpenCL"
                 RUNTIME DESTINATION "${_base_dest}/${OLLAMA_RUNNER_DIR}" COMPONENT llama-server
                 LIBRARY DESTINATION "${_base_dest}/${OLLAMA_RUNNER_DIR}" COMPONENT llama-server
             )
+
+            # libsycl dlopen()s the Unified Runtime loader and its Level-Zero /
+            # OpenCL adapters at runtime, so the dependency scan above cannot see
+            # them. Install them explicitly from the oneAPI compiler lib dirs.
+            install(CODE "
+                set(_ur_search_dirs \"${_oneapi_lib_dirs}\")
+                foreach(_dir IN LISTS _ur_search_dirs)
+                    file(GLOB _ur_libs
+                        \"\${_dir}/libur_loader.so*\"
+                        \"\${_dir}/libur_adapter_*.so*\")
+                    foreach(_lib IN LISTS _ur_libs)
+                        file(INSTALL \"\${_lib}\"
+                            DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${_base_dest}/${OLLAMA_RUNNER_DIR}\"
+                            FOLLOW_SYMLINK_CHAIN)
+                    endforeach()
+                endforeach()
+            " COMPONENT llama-server)
         endif()
     endif()
 else()
