@@ -53,6 +53,21 @@ func GPUDevices(ctx context.Context, runners []ml.FilteredRunnerDiscovery) []ml.
 			libDirs[filepath.Dir(file)] = struct{}{}
 		}
 
+		// Optionally include GPU backend libraries from explicitly allowed
+		// external directories (OLLAMA_LIBRARY_PATH). Backend identity is still
+		// derived from the ggml registration name during probing, so an external
+		// directory cannot relabel a device's backend.
+		for _, extDir := range envconfig.OllamaLibraryPath() {
+			extFiles, err := filepath.Glob(filepath.Join(extDir, "*ggml-*"))
+			if err != nil {
+				slog.Debug("unable to lookup external runner library directory", "dir", extDir, "error", err)
+				continue
+			}
+			for _, file := range extFiles {
+				libDirs[filepath.Dir(file)] = struct{}{}
+			}
+		}
+
 		if len(libDirs) == 0 {
 			libDirs[""] = struct{}{}
 		}

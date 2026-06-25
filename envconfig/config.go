@@ -240,7 +240,38 @@ var (
 	EnableIntegratedGPU = BoolWithDefault("OLLAMA_IGPU_ENABLE")
 	// NoCloudEnv checks the OLLAMA_NO_CLOUD environment variable.
 	NoCloudEnv = Bool("OLLAMA_NO_CLOUD")
+	// AllowExternalLibraryPath permits loading GPU backend libraries from the
+	// absolute directories listed in OLLAMA_LIBRARY_PATH. Disabled by default to
+	// avoid loading untrusted native code; see OllamaLibraryPath.
+	AllowExternalLibraryPath = Bool("OLLAMA_ALLOW_EXTERNAL_LIBRARY_PATH")
 )
+
+// OllamaLibraryPath returns additional GPU backend library directories
+// configured via OLLAMA_LIBRARY_PATH. Entries are only honored when
+// OLLAMA_ALLOW_EXTERNAL_LIBRARY_PATH is enabled, and only absolute paths are
+// accepted so discovery never loads native code from a relative location.
+func OllamaLibraryPath() []string {
+	if !AllowExternalLibraryPath() {
+		return nil
+	}
+	raw := Var("OLLAMA_LIBRARY_PATH")
+	if raw == "" {
+		return nil
+	}
+	var dirs []string
+	for _, p := range filepath.SplitList(raw) {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if !filepath.IsAbs(p) {
+			slog.Warn("ignoring non-absolute OLLAMA_LIBRARY_PATH entry", "path", p)
+			continue
+		}
+		dirs = append(dirs, filepath.Clean(p))
+	}
+	return dirs
+}
 
 func String(s string) func() string {
 	return func() string {
@@ -364,6 +395,9 @@ func AsMap() map[string]EnvVar {
 		ret["OLLAMA_VULKAN"] = EnvVar{"OLLAMA_VULKAN", EnableVulkan(true), "Enable Vulkan support"}
 		ret["OLLAMA_SYCL"] = EnvVar{"OLLAMA_SYCL", EnableSYCL(false), "Enable Intel SYCL (oneAPI) support"}
 	}
+
+	ret["OLLAMA_ALLOW_EXTERNAL_LIBRARY_PATH"] = EnvVar{"OLLAMA_ALLOW_EXTERNAL_LIBRARY_PATH", AllowExternalLibraryPath(), "Allow loading GPU backend libraries from OLLAMA_LIBRARY_PATH"}
+	ret["OLLAMA_LIBRARY_PATH"] = EnvVar{"OLLAMA_LIBRARY_PATH", String("OLLAMA_LIBRARY_PATH")(), "Extra absolute GPU backend library directories (requires OLLAMA_ALLOW_EXTERNAL_LIBRARY_PATH)"}
 
 	return ret
 }
