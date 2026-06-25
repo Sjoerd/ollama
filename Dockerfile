@@ -317,6 +317,13 @@ FROM --platform=linux/amd64 scratch AS amd64-archive
 COPY --from=amd64 /lib/ollama /lib/ollama/
 COPY --from=llama-server-rocm_v7_2 dist/lib/ollama /lib/ollama/
 
+# Intel SYCL ships as a separate archive (like ROCm) so the default amd64 build
+# does not require the heavy oneAPI toolchain. The cpu payload provides the base
+# ggml/llama libraries; only lib/ollama/sycl/ is packaged into the -sycl tarball.
+FROM --platform=linux/amd64 scratch AS sycl-archive
+COPY --from=llama-server-cpu  dist/lib/ollama /lib/ollama/
+COPY --from=llama-server-sycl dist/lib/ollama /lib/ollama/
+
 FROM --platform=linux/arm64 scratch AS arm64-archive
 COPY --from=arm64 /lib/ollama /lib/ollama/
 
