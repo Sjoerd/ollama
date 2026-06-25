@@ -503,6 +503,18 @@ if(OLLAMA_RUNNER_DIR)
             )
         endif()
     endif()
+    if(GGML_SYCL)
+        # Install the SYCL backend module. The Intel oneAPI runtime libraries it
+        # depends on (libsycl, libsvml, libimf, libintlc, oneMKL, ...) are bundled
+        # separately in the packaging step, mirroring how CUDA/ROCm runtime
+        # dependencies are handled above.
+        if(TARGET ggml-sycl)
+            install(TARGETS ggml-sycl
+                RUNTIME DESTINATION "${_base_dest}/${OLLAMA_RUNNER_DIR}" COMPONENT llama-server
+                LIBRARY DESTINATION "${_base_dest}/${OLLAMA_RUNNER_DIR}" COMPONENT llama-server
+            )
+        endif()
+    endif()
 else()
     # CPU/base build — install llama-server, llama-quantize + all shared libs + CPU backend modules
     # RUNTIME covers executables and Windows DLLs; LIBRARY covers .so on Linux
