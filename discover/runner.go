@@ -98,6 +98,9 @@ func GPUDevices(ctx context.Context, runners []ml.FilteredRunnerDiscovery) []ml.
 					continue
 				} else if !envconfig.EnableVulkan(true) && strings.Contains(filepath.Base(dir), "vulkan") {
 					continue
+				} else if !envconfig.EnableSYCL(false) && strings.Contains(filepath.Base(dir), "sycl") {
+					slog.Debug("SYCL support not enabled (set OLLAMA_SYCL=1 to enable), skipping", "libDir", dir)
+					continue
 				}
 				dirs = []string{ml.LibOllamaPath, dir}
 			} else {
