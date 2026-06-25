@@ -39,7 +39,15 @@ cmake -B build . -DOLLAMA_LLAMA_BACKENDS="cuda_v13;vulkan"
 cmake --build build --parallel 8
 ```
 
-Supported backend values are `cuda_v12`, `cuda_v13`, `rocm_v7_1`, `rocm_v7_2`, `vulkan`, `cuda_jetpack5`, and `cuda_jetpack6`.
+Supported backend values are `cuda_v12`, `cuda_v13`, `rocm_v7_1`, `rocm_v7_2`, `vulkan`, `sycl`, `cuda_jetpack5`, and `cuda_jetpack6`.
+
+Building the `sycl` backend (Intel Arc / Battlemage GPUs) requires the [Intel oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html). Activate the oneAPI environment and use the Intel DPC++ compiler when configuring:
+
+```shell
+source /opt/intel/oneapi/setvars.sh   # Linux; use setvars.bat on Windows
+CC=icx CXX=icpx cmake -B build . -DOLLAMA_LLAMA_BACKENDS=sycl
+cmake --build build --parallel 8
+```
 
 Use standard CMake architecture overrides to narrow GPU builds for local hardware:
 
@@ -78,6 +86,8 @@ Additional prerequisites:
     - [CUDA SDK](https://developer.nvidia.com/cuda-downloads?target_os=Windows&target_arch=x86_64&target_type=exe_network)
 - (Optional) Vulkan GPU support
     - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) - useful for AMD/Intel GPUs
+- (Optional) Intel GPU support (SYCL / oneAPI)
+    - [Intel oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html) - for Intel Arc / Battlemage GPUs
 - (Optional) MLX engine support
     - [CUDA 13+ SDK](https://developer.nvidia.com/cuda-downloads)
     - [cuDNN 9+](https://developer.nvidia.com/cudnn)
@@ -95,6 +105,15 @@ For Ninja builds, run CMake from a Developer PowerShell/Command Prompt or anothe
 > set VULKAN_SDK=C:\VulkanSDK\<version>
 > ```
 
+> Building for SYCL requires the Intel oneAPI environment (DPC++ compiler `icx`/`icpx`):
+>
+> CMD
+> ```cmd
+> "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+> set CC=icx
+> set CXX=icpx
+> ```
+
 ## Windows (ARM)
 
 Windows ARM does not support additional acceleration libraries at this time.
@@ -110,6 +129,9 @@ Additional prerequisites:
 - (Optional) Vulkan GPU support
     - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) - useful for AMD/Intel GPUs
     - Or install via package manager: `sudo apt install vulkan-sdk` (Ubuntu/Debian) or `sudo dnf install vulkan-sdk` (Fedora/CentOS)
+- (Optional) Intel GPU support (SYCL / oneAPI)
+    - [Intel oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html) - for Intel Arc / Battlemage GPUs
+    - Or install via package manager: `sudo apt install intel-basekit` (Ubuntu/Debian)
 - (Optional) MLX engine support
     - [CUDA 13+ SDK](https://developer.nvidia.com/cuda-downloads)
     - [cuDNN 9+](https://developer.nvidia.com/cudnn)
