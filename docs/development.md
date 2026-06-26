@@ -49,7 +49,7 @@ CC=icx CXX=icpx cmake -B build . -DOLLAMA_LLAMA_BACKENDS=sycl
 cmake --build build --parallel 8
 ```
 
-At runtime, SYCL discovery is opt-in: start the server with `OLLAMA_SYCL=1` (or `OLLAMA_LLM_LIBRARY=sycl`). On multi-GPU and iGPU+dGPU systems Ollama pins each runner to the selected device(s) with `ONEAPI_DEVICE_SELECTOR=level_zero:<id>`. SYCL support is developed and validated on Linux; the Windows build step exists but is experimental and is not part of the default Windows build. Flash attention is not enabled for the SYCL backend.
+At runtime, SYCL discovery is opt-in: start the server with `OLLAMA_SYCL=1` (or `OLLAMA_LLM_LIBRARY=sycl`). On multi-GPU and iGPU+dGPU systems Ollama pins each runner to the selected device(s) with `ONEAPI_DEVICE_SELECTOR=level_zero:<id>`, and sets `ZES_ENABLE_SYSMAN=1` so ggml-sycl reports free GPU memory to the scheduler. SYCL support is developed and validated on Linux; the Windows build step exists but is experimental and is not part of the default Windows build. Flash attention is not enabled for the SYCL backend.
 
 Use standard CMake architecture overrides to narrow GPU builds for local hardware:
 
