@@ -41,13 +41,15 @@ cmake --build build --parallel 8
 
 Supported backend values are `cuda_v12`, `cuda_v13`, `rocm_v7_1`, `rocm_v7_2`, `vulkan`, `sycl`, `cuda_jetpack5`, and `cuda_jetpack6`.
 
-Building the `sycl` backend (Intel Arc / Battlemage GPUs) requires the [Intel oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html). Activate the oneAPI environment and use the Intel DPC++ compiler when configuring:
+Building the `sycl` backend (Intel Arc / Battlemage GPUs) requires the [Intel oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html). Activate the oneAPI environment so the Intel DPC++ compiler (`icx`/`icpx`) is on `PATH`; the build selects it for the SYCL backend automatically:
 
 ```shell
 source /opt/intel/oneapi/setvars.sh   # Linux; use setvars.bat on Windows
-CC=icx CXX=icpx cmake -B build . -DOLLAMA_LLAMA_BACKENDS=sycl
+cmake -B build . -DOLLAMA_LLAMA_BACKENDS=sycl
 cmake --build build --parallel 8
 ```
+
+> The SYCL build (oneMKL/oneDNN) is memory-heavy. On machines with limited RAM, cap the parallel compile jobs to avoid the out-of-memory killer, e.g. `CMAKE_BUILD_PARALLEL_LEVEL=4 cmake --build build`.
 
 At runtime, SYCL discovery is opt-in: start the server with `OLLAMA_SYCL=1` (or `OLLAMA_LLM_LIBRARY=sycl`). On multi-GPU and iGPU+dGPU systems Ollama pins each runner to the selected device(s) with `ONEAPI_DEVICE_SELECTOR=level_zero:<id>`, and sets `ZES_ENABLE_SYSMAN=1` so ggml-sycl reports free GPU memory to the scheduler. SYCL support is developed and validated on Linux; the Windows build step exists but is experimental and is not part of the default Windows build. Flash attention is not enabled for the SYCL backend.
 

@@ -594,12 +594,14 @@ if(OLLAMA_HAVE_LLAMA_SERVER)
                     -DOLLAMA_GPU_BACKEND=vulkan)
             list(APPEND _backend_targets ollama-llama-server-vulkan)
         elseif(_backend STREQUAL "sycl")
-            # SYCL compiles ggml's kernels with the Intel oneAPI DPC++ compiler,
-            # so the build environment must have icx/icpx active as the C/C++
-            # compiler (e.g. via `source /opt/intel/oneapi/setvars.sh` and
-            # CC=icx CXX=icpx). GGML_SYCL_TARGET=INTEL selects Intel GPUs
-            # (Arc / Battlemage / Data Center). Runtime oneAPI libraries are
-            # bundled separately in the packaging step.
+            # SYCL compiles ggml's kernels with the Intel oneAPI DPC++ compiler.
+            # Pin the sub-build to icx/icpx explicitly: the nested llama/server
+            # configure does not inherit the superbuild's compiler, so without
+            # this it falls back to the system compiler and ggml-sycl's -fsycl
+            # flag fails. The oneAPI environment must be active so icx/icpx are on
+            # PATH (e.g. `source /opt/intel/oneapi/setvars.sh`). GGML_SYCL_TARGET=
+            # INTEL selects Intel GPUs (Arc / Battlemage / Data Center); runtime
+            # oneAPI libraries are bundled separately in the packaging step.
             ollama_add_llama_server_build(sycl
                 RUNNER_DIR sycl
                 TARGETS ggml-sycl
@@ -608,6 +610,8 @@ if(OLLAMA_HAVE_LLAMA_SERVER)
                     -DGGML_BACKEND_DL=ON
                     -DGGML_SYCL=ON
                     -DGGML_SYCL_TARGET=INTEL
+                    -DCMAKE_C_COMPILER=icx
+                    -DCMAKE_CXX_COMPILER=icpx
                     -DOLLAMA_GPU_BACKEND=sycl)
             list(APPEND _backend_targets ollama-llama-server-sycl)
         elseif(_backend STREQUAL "cuda_jetpack5")

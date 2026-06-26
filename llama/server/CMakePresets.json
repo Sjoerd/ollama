@@ -227,6 +227,8 @@
       "cacheVariables": {
         "GGML_SYCL": "ON",
         "GGML_SYCL_TARGET": "INTEL",
+        "CMAKE_C_COMPILER": "icx",
+        "CMAKE_CXX_COMPILER": "icpx",
         "OLLAMA_RUNNER_DIR": "sycl",
         "OLLAMA_GPU_BACKEND": "sycl"
       }
