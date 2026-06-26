@@ -983,7 +983,6 @@ try {
         cuda13
         rocm7
         vulkan
-        sycl
         mlxCuda13
         ollama
         app
