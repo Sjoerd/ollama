@@ -113,8 +113,8 @@ func GPUDevices(ctx context.Context, runners []ml.FilteredRunnerDiscovery) []ml.
 					continue
 				} else if !envconfig.EnableVulkan(true) && strings.Contains(filepath.Base(dir), "vulkan") {
 					continue
-				} else if !envconfig.EnableSYCL(false) && strings.Contains(filepath.Base(dir), "sycl") {
-					slog.Debug("SYCL support not enabled (set OLLAMA_SYCL=1 to enable), skipping", "libDir", dir)
+				} else if strings.Contains(filepath.Base(dir), "sycl") && !syclDiscoveryEnabled(requested) {
+					slog.Debug("SYCL support not enabled (set OLLAMA_SYCL=1 or OLLAMA_LLM_LIBRARY=sycl to enable), skipping", "libDir", dir)
 					continue
 				}
 				dirs = []string{ml.LibOllamaPath, dir}
@@ -439,9 +439,22 @@ func integratedGPUAllowedByDefault(device ml.DeviceInfo) bool {
 	case "ROCm":
 		_, ok := defaultIntegratedROCmGFXTargets[device.GFXTarget]
 		return ok
+	case "SYCL":
+		// SYCL discovery is already opt-in (OLLAMA_SYCL=1 or OLLAMA_LLM_LIBRARY=sycl),
+		// so an Intel iGPU surfaced through SYCL was explicitly requested. Allow it
+		// by default; OLLAMA_IGPU_ENABLE=0 still drops it.
+		return true
 	default:
 		return false
 	}
+}
+
+// syclDiscoveryEnabled reports whether the bundled SYCL runner should be
+// considered during discovery. SYCL is experimental and opt-in: it is enabled
+// either globally with OLLAMA_SYCL=1 or by explicitly requesting it with
+// OLLAMA_LLM_LIBRARY=sycl.
+func syclDiscoveryEnabled(requested string) bool {
+	return envconfig.EnableSYCL(false) || requested == "sycl"
 }
 
 func filterOverlapByLibrary(supported map[string]map[string]map[string]int, needsDelete []bool) {
@@ -723,6 +736,7 @@ func overrideWarnings() {
 		"HIP_VISIBLE_DEVICES",
 		"ROCR_VISIBLE_DEVICES",
 		"GGML_VK_VISIBLE_DEVICES",
+		"ONEAPI_DEVICE_SELECTOR",
 		"GPU_DEVICE_ORDINAL",
 		"HSA_OVERRIDE_GFX_VERSION",
 	} {

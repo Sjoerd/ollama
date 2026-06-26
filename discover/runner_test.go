@@ -201,6 +201,52 @@ func assertDeviceIDs(t *testing.T, got []ml.DeviceInfo, want []ml.DeviceID) {
 	}
 }
 
+func TestSYCLDiscoveryEnabled(t *testing.T) {
+	cases := []struct {
+		name      string
+		sycl      string
+		requested string
+		want      bool
+	}{
+		{"disabled by default", "", "", false},
+		{"OLLAMA_SYCL=1 enables", "1", "", true},
+		{"OLLAMA_SYCL=0 stays disabled", "0", "", false},
+		{"OLLAMA_LLM_LIBRARY=sycl enables", "", "sycl", true},
+		{"explicit request overrides OLLAMA_SYCL=0", "0", "sycl", true},
+		{"unrelated request stays disabled", "", "cuda_v12", false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("OLLAMA_SYCL", tt.sycl)
+			if got := syclDiscoveryEnabled(tt.requested); got != tt.want {
+				t.Errorf("syclDiscoveryEnabled(%q) with OLLAMA_SYCL=%q = %v, want %v", tt.requested, tt.sycl, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFilterIntegratedGPUsSYCL(t *testing.T) {
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		t.Skip("integrated GPU filtering is a no-op on macOS arm64")
+	}
+	devices := []ml.DeviceInfo{
+		{DeviceID: ml.DeviceID{Library: "SYCL", ID: "0"}, Description: "Intel Arc Graphics", Integrated: true},
+		{DeviceID: ml.DeviceID{Library: "SYCL", ID: "1"}, Description: "Intel Arc Pro B50"},
+	}
+
+	t.Run("auto admits SYCL integrated GPU", func(t *testing.T) {
+		t.Setenv("OLLAMA_IGPU_ENABLE", "")
+		got := filterIntegratedGPUs(append([]ml.DeviceInfo{}, devices...))
+		assertDeviceIDs(t, got, []ml.DeviceID{{Library: "SYCL", ID: "0"}, {Library: "SYCL", ID: "1"}})
+	})
+
+	t.Run("explicit false drops SYCL integrated GPU", func(t *testing.T) {
+		t.Setenv("OLLAMA_IGPU_ENABLE", "false")
+		got := filterIntegratedGPUs(append([]ml.DeviceInfo{}, devices...))
+		assertDeviceIDs(t, got, []ml.DeviceID{{Library: "SYCL", ID: "1"}})
+	})
+}
+
 func TestRemapFilterIDForUserVisibleDevices(t *testing.T) {
 	tests := []struct {
 		name       string
