@@ -602,6 +602,14 @@ if(OLLAMA_HAVE_LLAMA_SERVER)
             # PATH (e.g. `source /opt/intel/oneapi/setvars.sh`). GGML_SYCL_TARGET=
             # INTEL selects Intel GPUs (Arc / Battlemage / Data Center); runtime
             # oneAPI libraries are bundled separately in the packaging step.
+            #
+            # GGML_SYCL_DNN=OFF disables oneDNN. ggml-sycl links oneDNN by default
+            # (GGML_SYCL_DNN defaults ON) only to accelerate some matmuls, and it
+            # already falls back to its own SYCL kernels when oneDNN is absent. On
+            # recent oneAPI (2026.0) the bundled oneDNN crashes in its SYCL device-
+            # binary registration the moment libggml-sycl.so is dlopen'd, taking
+            # down discovery. Dropping oneDNN removes that crash vector and a heavy
+            # dependency for an opt-in, experimental backend.
             ollama_add_llama_server_build(sycl
                 RUNNER_DIR sycl
                 TARGETS ggml-sycl
@@ -610,6 +618,7 @@ if(OLLAMA_HAVE_LLAMA_SERVER)
                     -DGGML_BACKEND_DL=ON
                     -DGGML_SYCL=ON
                     -DGGML_SYCL_TARGET=INTEL
+                    -DGGML_SYCL_DNN=OFF
                     -DCMAKE_C_COMPILER=icx
                     -DCMAKE_CXX_COMPILER=icpx
                     -DOLLAMA_GPU_BACKEND=sycl)
