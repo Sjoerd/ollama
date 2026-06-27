@@ -442,6 +442,15 @@ func SetupLlamaServerCommandEnv(cmd *exec.Cmd, exe string, gpuLibs []string, ext
 		envUpdates[k] = v
 	}
 
+	// ggml-sycl reports free GPU memory through the Level Zero sysman interface,
+	// which Ollama's scheduler relies on for fitting models. Enable it whenever a
+	// SYCL backend directory is in use so discovery, native probing, and real
+	// runners agree. Respect an explicit value from extraEnvs or the parent
+	// environment.
+	if _, set := envUpdates["ZES_ENABLE_SYSMAN"]; !set && os.Getenv("ZES_ENABLE_SYSMAN") == "" && hasSYCLLibDir(gpuLibs) {
+		envUpdates["ZES_ENABLE_SYSMAN"] = "1"
+	}
+
 	libraryPaths := llamaServerLibraryPaths(exe, gpuLibs, envUpdates)
 	pathEnv := llamaServerLibraryPathEnv()
 	envUpdates[pathEnv] = strings.Join(libraryPaths, string(filepath.ListSeparator))
@@ -464,6 +473,17 @@ func SetupLlamaServerCommandEnv(cmd *exec.Cmd, exe string, gpuLibs []string, ext
 			cmd.Env = append(cmd.Env, key+"="+val)
 		}
 	}
+}
+
+// hasSYCLLibDir reports whether any of the given GPU library directories is a
+// SYCL backend directory (e.g. lib/ollama/sycl).
+func hasSYCLLibDir(gpuLibs []string) bool {
+	for _, dir := range gpuLibs {
+		if strings.Contains(strings.ToLower(filepath.Base(dir)), "sycl") {
+			return true
+		}
+	}
+	return false
 }
 
 func llamaServerLibraryPathEnv() string {

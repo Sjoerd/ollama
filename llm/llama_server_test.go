@@ -1298,6 +1298,53 @@ func TestLlamaServerPreservedTokens(t *testing.T) {
 	}
 }
 
+func TestSetupLlamaServerCommandEnvSYCL(t *testing.T) {
+	exe := filepath.Join(t.TempDir(), "llama-server")
+	if err := os.WriteFile(exe, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	readEnv := func(cmd *exec.Cmd) map[string]string {
+		env := map[string]string{}
+		for _, kv := range cmd.Env {
+			if k, v, ok := strings.Cut(kv, "="); ok {
+				env[strings.ToUpper(k)] = v
+			}
+		}
+		return env
+	}
+
+	syclDir := filepath.Join(ml.LibOllamaPath, "sycl")
+	cudaDir := filepath.Join(ml.LibOllamaPath, "cuda_v12")
+
+	t.Run("enables sysman for sycl lib dir", func(t *testing.T) {
+		t.Setenv("ZES_ENABLE_SYSMAN", "")
+		cmd := exec.Command("echo")
+		SetupLlamaServerCommandEnv(cmd, exe, []string{ml.LibOllamaPath, syclDir}, nil)
+		if got := readEnv(cmd)["ZES_ENABLE_SYSMAN"]; got != "1" {
+			t.Fatalf("ZES_ENABLE_SYSMAN = %q, want %q", got, "1")
+		}
+	})
+
+	t.Run("not enabled without sycl lib dir", func(t *testing.T) {
+		t.Setenv("ZES_ENABLE_SYSMAN", "")
+		cmd := exec.Command("echo")
+		SetupLlamaServerCommandEnv(cmd, exe, []string{ml.LibOllamaPath, cudaDir}, nil)
+		if got := readEnv(cmd)["ZES_ENABLE_SYSMAN"]; got == "1" {
+			t.Fatalf("ZES_ENABLE_SYSMAN = %q, want it not enabled for a non-SYCL dir", got)
+		}
+	})
+
+	t.Run("respects explicit user value", func(t *testing.T) {
+		t.Setenv("ZES_ENABLE_SYSMAN", "0")
+		cmd := exec.Command("echo")
+		SetupLlamaServerCommandEnv(cmd, exe, []string{syclDir}, nil)
+		if got := readEnv(cmd)["ZES_ENABLE_SYSMAN"]; got != "0" {
+			t.Fatalf("ZES_ENABLE_SYSMAN = %q, want %q (user value preserved)", got, "0")
+		}
+	})
+}
+
 func TestSetupLlamaServerCommandEnv(t *testing.T) {
 	exeDir := t.TempDir()
 	exe := filepath.Join(exeDir, "llama-server")

@@ -485,7 +485,7 @@ func likelyVulkanDuplicate(a, b DeviceInfo) bool {
 	if vulkan.Library != "Vulkan" {
 		return false
 	}
-	if other.Library != "CUDA" && other.Library != "ROCm" {
+	if other.Library != "CUDA" && other.Library != "ROCm" && other.Library != "SYCL" {
 		return false
 	}
 	if normalizeDeviceDescription(vulkan.Description) == "" {
@@ -570,6 +570,9 @@ func (a DeviceInfo) IsBetter(b DeviceInfo) bool {
 // all selected devices.
 func FlashAttentionSupported(l []DeviceInfo) bool {
 	for _, gpu := range l {
+		// SYCL is intentionally omitted: in ggml-sycl flash attention is a
+		// compile-time opt-in (SYCL_FLASH_ATTN) that the default GGML_SYCL build
+		// does not enable, so claiming support here would be incorrect.
 		supportsFA := gpu.Library == "cpu" ||
 			gpu.Name == "Metal" || gpu.Library == "Metal" ||
 			cudaFlashAttentionSupported(gpu) ||
@@ -674,18 +677,42 @@ func (d DeviceInfo) AddInitValidation(env map[string]string) {
 
 // PreferredLibrary returns true if this library is preferred over the other input
 // library
-// Used to filter out Vulkan in favor of CUDA or ROCm
+// Used to filter out Vulkan in favor of CUDA, ROCm or SYCL
 func (d DeviceInfo) PreferredLibrary(other DeviceInfo) bool {
 	// TODO in the future if we find Vulkan is better than ROCm on some devices
 	// that implementation can live here.
 
-	if d.Library == "CUDA" || d.Library == "ROCm" {
+	// SYCL (Intel oneAPI) is the native, more optimized path for Intel GPUs, so
+	// prefer it over Vulkan when the same device is discovered by both.
+	if d.Library == "CUDA" || d.Library == "ROCm" || d.Library == "SYCL" {
 		return true
 	}
 	return false
 }
 
 func (d DeviceInfo) updateVisibleDevicesEnv(env map[string]string, mustFilter bool) {
+	if d.Library == "SYCL" {
+		// ggml-sycl enumerates Level Zero GPUs through the SYCL runtime, so pin
+		// the child runner to the selected device(s) with ONEAPI_DEVICE_SELECTOR
+		// — the Intel/llama.cpp-recommended selector (SYCL_DEVICE_FILTER is
+		// deprecated and ZE_AFFINITY_MASK is lower level, affecting every Level
+		// Zero client). Like CUDA_VISIBLE_DEVICES it also renumbers the selected
+		// devices to 0..N for the child. SYCL is always filtered (independent of
+		// mustFilter) so multi-GPU and iGPU+dGPU systems target exactly the
+		// chosen device(s); scoping to level_zero keeps the ordinals aligned with
+		// the order ggml enumerated during discovery.
+		const key = "ONEAPI_DEVICE_SELECTOR"
+		id := d.ID
+		if d.FilterID != "" {
+			id = d.FilterID
+		}
+		if existing, ok := env[key]; ok {
+			env[key] = existing + "," + id
+		} else {
+			env[key] = "level_zero:" + id
+		}
+		return
+	}
 	var envVar string
 	var rocmOrdinalEnv string
 	switch d.Library {

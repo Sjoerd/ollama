@@ -97,6 +97,29 @@ func TestGetDevicesEnvFiltersVisibleDevices(t *testing.T) {
 			},
 			key: "GGML_VK_VISIBLE_DEVICES",
 		},
+		{
+			name: "single SYCL",
+			gpus: []DeviceInfo{{DeviceID: DeviceID{Library: "SYCL", ID: "0"}}},
+			key:  "ONEAPI_DEVICE_SELECTOR",
+			want: "level_zero:0",
+		},
+		{
+			// Unlike Vulkan/CUDA, SYCL is always filtered so multi-GPU and
+			// iGPU+dGPU systems target exactly the selected devices.
+			name: "multiple SYCL always filtered",
+			gpus: []DeviceInfo{
+				{DeviceID: DeviceID{Library: "SYCL", ID: "0"}},
+				{DeviceID: DeviceID{Library: "SYCL", ID: "1"}},
+			},
+			key:  "ONEAPI_DEVICE_SELECTOR",
+			want: "level_zero:0,1",
+		},
+		{
+			name: "SYCL respects FilterID",
+			gpus: []DeviceInfo{{DeviceID: DeviceID{Library: "SYCL", ID: "0"}, FilterID: "2"}},
+			key:  "ONEAPI_DEVICE_SELECTOR",
+			want: "level_zero:2",
+		},
 	}
 
 	for _, tt := range tests {
@@ -106,6 +129,24 @@ func TestGetDevicesEnvFiltersVisibleDevices(t *testing.T) {
 				t.Fatalf("%s = %q, want %q", tt.key, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFlashAttentionSupportedSYCL(t *testing.T) {
+	// ggml-sycl flash attention is a compile-time opt-in that the default build
+	// does not enable, so SYCL must never report support — even alongside a
+	// library that does support it.
+	if FlashAttentionSupported([]DeviceInfo{{DeviceID: DeviceID{Library: "SYCL"}}}) {
+		t.Fatal("SYCL must not report flash attention support")
+	}
+	if !FlashAttentionSupported([]DeviceInfo{{DeviceID: DeviceID{Library: "Vulkan"}}}) {
+		t.Fatal("Vulkan should report flash attention support")
+	}
+	if FlashAttentionSupported([]DeviceInfo{
+		{DeviceID: DeviceID{Library: "Vulkan"}},
+		{DeviceID: DeviceID{Library: "SYCL"}},
+	}) {
+		t.Fatal("a device set containing SYCL must not report flash attention support")
 	}
 }
 
