@@ -67,6 +67,20 @@ elif echo $PLATFORM | grep "amd64" > /dev/null ; then
         ( cd ./dist/ && if [ -e lib/ollama/include ]; then tar c lib/ollama/mlx* lib/ollama/include; else tar c lib/ollama/mlx*; fi ) | zstd -9 -T0 >./dist/ollama-linux-amd64-mlx.tar.zst
 fi
 
+# Intel SYCL (oneAPI) is built on demand so the default archive does not require
+# the oneAPI toolchain. Enable with OLLAMA_BUILD_SYCL=1.
+if [ -n "${OLLAMA_BUILD_SYCL:-}" ] && echo "$PLATFORM" | grep "amd64" > /dev/null ; then
+    echo "Building Intel SYCL archive..."
+    docker buildx build \
+            --output type=local,dest=./dist/sycl-archive \
+            --platform=linux/amd64 \
+            ${OLLAMA_COMMON_BUILD_ARGS} \
+            --target sycl-archive \
+            -f Dockerfile \
+            .
+    ( cd ./dist/sycl-archive && tar c lib/ollama/sycl* ) | zstd -9 -T0 >./dist/ollama-linux-amd64-sycl.tar.zst
+fi
+
 LIMIT=2147483648
 for f in ./dist/ollama-linux-*.tar.zst; do
     [ -f "$f" ] || continue

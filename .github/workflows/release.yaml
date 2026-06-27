@@ -448,6 +448,8 @@ jobs:
             target: llama-server-rocm_v7_2
           - arch: amd64
             target: llama-server-vulkan
+          - arch: amd64
+            target: llama-server-sycl
           - arch: arm64
             target: llama-server-cpu
           - arch: arm64

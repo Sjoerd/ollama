@@ -73,6 +73,23 @@ RUN ln -s /usr/bin/python3 /usr/bin/python \
     && rm -rf /tmp/${VULKANVERSION} /tmp/vulkansdk.tar.xz
 ENV VULKAN_SDK=/usr/local
 
+FROM base AS sycl-deps
+# Intel oneAPI provides the DPC++ (icx/icpx) compiler and oneMKL needed to build
+# the ggml SYCL backend for Intel Arc / Battlemage GPUs.
+# NOTE: the package set and versions still need to be validated and pinned on
+# Intel hardware before this is proposed upstream.
+RUN printf '%s\n' \
+        '[oneAPI]' \
+        'name=Intel oneAPI' \
+        'baseurl=https://yum.repos.intel.com/oneapi' \
+        'enabled=1' \
+        'gpgcheck=1' \
+        'repo_gpgcheck=1' \
+        'gpgkey=https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB' \
+        > /etc/yum.repos.d/oneAPI.repo \
+    && dnf install -y intel-oneapi-compiler-dpcpp-cpp intel-oneapi-mkl-devel
+ENV ONEAPI_ROOT=/opt/intel/oneapi
+
 #
 # llama-server stages — rebuild when LLAMA_CPP_VERSION, llama/server/, or llama/compat/ changes.
 #
@@ -148,6 +165,23 @@ RUN --mount=type=cache,target=/root/.ccache \
 
 FROM scratch AS publish-llama-server-vulkan
 COPY --from=llama-server-vulkan dist/lib/ollama /lib/ollama/
+
+FROM sycl-deps AS llama-server-sycl
+COPY LLAMA_CPP_VERSION .
+COPY llama/server llama/server
+COPY llama/compat llama/compat
+# Source the oneAPI environment so icx/icpx and oneMKL are on PATH, then build the
+# SYCL backend module into lib/ollama/sycl/. Bundling the oneAPI runtime libraries
+# into the payload (so it runs without a system oneAPI install) is a follow-up step
+# that must be validated on Intel hardware.
+RUN --mount=type=cache,target=/root/.ccache \
+    bash -c '. ${ONEAPI_ROOT}/setvars.sh && \
+        CC=icx CXX=icpx cmake -S llama/server --preset sycl && \
+        cmake --build build/llama-server-sycl -- -l $(nproc) && \
+        cmake --install build/llama-server-sycl --component llama-server --strip'
+
+FROM scratch AS publish-llama-server-sycl
+COPY --from=llama-server-sycl dist/lib/ollama /lib/ollama/
 
 #
 # JetPack stages — self-contained with their own base images
@@ -282,6 +316,13 @@ COPY --from=llama-server-rocm_v7_2 dist/lib/ollama /lib/ollama
 FROM --platform=linux/amd64 scratch AS amd64-archive
 COPY --from=amd64 /lib/ollama /lib/ollama/
 COPY --from=llama-server-rocm_v7_2 dist/lib/ollama /lib/ollama/
+
+# Intel SYCL ships as a separate archive (like ROCm) so the default amd64 build
+# does not require the heavy oneAPI toolchain. The cpu payload provides the base
+# ggml/llama libraries; only lib/ollama/sycl/ is packaged into the -sycl tarball.
+FROM --platform=linux/amd64 scratch AS sycl-archive
+COPY --from=llama-server-cpu  dist/lib/ollama /lib/ollama/
+COPY --from=llama-server-sycl dist/lib/ollama /lib/ollama/
 
 FROM --platform=linux/arm64 scratch AS arm64-archive
 COPY --from=arm64 /lib/ollama /lib/ollama/

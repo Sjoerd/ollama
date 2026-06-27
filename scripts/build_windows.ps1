@@ -509,6 +509,23 @@ function vulkan {
     }
 }
 
+function sycl {
+    if (Get-Command icx -ErrorAction SilentlyContinue) {
+        Write-Output "Building llama-server SYCL backend"
+        # SYCL requires the Intel oneAPI DPC++ compiler (icx). Run from a shell
+        # where oneAPI's setvars.bat has already been sourced.
+        # NOTE: not yet validated on Windows Intel hardware.
+        & cmake -S llama\server --preset sycl -B build\ls-sycl --install-prefix $script:DIST_DIR -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx
+        if ($LASTEXITCODE -ne 0) { exit($LASTEXITCODE)}
+        & cmake --build build\ls-sycl --config Release --parallel $script:JOBS
+        if ($LASTEXITCODE -ne 0) { exit($LASTEXITCODE)}
+        & cmake --install build\ls-sycl --component llama-server --strip
+        if ($LASTEXITCODE -ne 0) { exit($LASTEXITCODE)}
+    } else {
+        Write-Output "Intel oneAPI (icx) not detected, skipping SYCL"
+    }
+}
+
 function mlxCuda13 {
     mkdir -Force -path "${script:DIST_DIR}\" | Out-Null
     $cudaMajorVer="13"
