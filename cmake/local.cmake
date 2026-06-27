@@ -7,7 +7,7 @@
 include(ExternalProject)
 
 set(OLLAMA_LLAMA_BACKENDS "" CACHE STRING
-    "Semicolon-separated llama-server GPU backends to build: cuda_v12;cuda_v13;rocm_v7_1;rocm_v7_2;vulkan;cuda_jetpack5;cuda_jetpack6")
+    "Semicolon-separated llama-server GPU backends to build: cuda_v12;cuda_v13;rocm_v7_1;rocm_v7_2;vulkan;sycl;cuda_jetpack5;cuda_jetpack6")
 set(_ollama_mlx_backends_doc "Semicolon-separated MLX backends to build: cuda_v13;metal_v3;metal_v4")
 set(OLLAMA_VERSION "0.0.0" CACHE STRING "Ollama version embedded in the local Go binary")
 set(OLLAMA_PAYLOAD_INSTALL_PREFIX "${CMAKE_BINARY_DIR}" CACHE PATH
@@ -593,6 +593,36 @@ if(OLLAMA_HAVE_LLAMA_SERVER)
                     -DGGML_VULKAN=ON
                     -DOLLAMA_GPU_BACKEND=vulkan)
             list(APPEND _backend_targets ollama-llama-server-vulkan)
+        elseif(_backend STREQUAL "sycl")
+            # SYCL compiles ggml's kernels with the Intel oneAPI DPC++ compiler.
+            # Pin the sub-build to icx/icpx explicitly: the nested llama/server
+            # configure does not inherit the superbuild's compiler, so without
+            # this it falls back to the system compiler and ggml-sycl's -fsycl
+            # flag fails. The oneAPI environment must be active so icx/icpx are on
+            # PATH (e.g. `source /opt/intel/oneapi/setvars.sh`). GGML_SYCL_TARGET=
+            # INTEL selects Intel GPUs (Arc / Battlemage / Data Center); runtime
+            # oneAPI libraries are bundled separately in the packaging step.
+            #
+            # GGML_SYCL_DNN=OFF disables oneDNN. ggml-sycl links oneDNN by default
+            # (GGML_SYCL_DNN defaults ON) only to accelerate some matmuls, and it
+            # already falls back to its own SYCL kernels when oneDNN is absent. On
+            # recent oneAPI (2026.0) the bundled oneDNN crashes in its SYCL device-
+            # binary registration the moment libggml-sycl.so is dlopen'd, taking
+            # down discovery. Dropping oneDNN removes that crash vector and a heavy
+            # dependency for an opt-in, experimental backend.
+            ollama_add_llama_server_build(sycl
+                RUNNER_DIR sycl
+                TARGETS ggml-sycl
+                CMAKE_ARGS
+                    -DBUILD_SHARED_LIBS=ON
+                    -DGGML_BACKEND_DL=ON
+                    -DGGML_SYCL=ON
+                    -DGGML_SYCL_TARGET=INTEL
+                    -DGGML_SYCL_DNN=OFF
+                    -DCMAKE_C_COMPILER=icx
+                    -DCMAKE_CXX_COMPILER=icpx
+                    -DOLLAMA_GPU_BACKEND=sycl)
+            list(APPEND _backend_targets ollama-llama-server-sycl)
         elseif(_backend STREQUAL "cuda_jetpack5")
             if(CMAKE_CUDA_ARCHITECTURES)
                 set(_cuda_preset llama_cuda_jetpack5_user_arch)
