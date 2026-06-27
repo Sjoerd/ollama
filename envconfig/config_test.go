@@ -437,3 +437,41 @@ func TestNoCloud(t *testing.T) {
 		})
 	}
 }
+
+func TestOllamaLibraryPath(t *testing.T) {
+	absA := t.TempDir()
+	absB := t.TempDir()
+	sep := string(filepath.ListSeparator)
+
+	t.Run("disabled by default", func(t *testing.T) {
+		t.Setenv("OLLAMA_ALLOW_EXTERNAL_LIBRARY_PATH", "")
+		t.Setenv("OLLAMA_LIBRARY_PATH", absA)
+		if got := OllamaLibraryPath(); got != nil {
+			t.Errorf("OllamaLibraryPath() = %v, want nil when not allowed", got)
+		}
+	})
+
+	t.Run("allowed returns absolute dirs", func(t *testing.T) {
+		t.Setenv("OLLAMA_ALLOW_EXTERNAL_LIBRARY_PATH", "1")
+		t.Setenv("OLLAMA_LIBRARY_PATH", absA+sep+absB)
+		if diff := cmp.Diff([]string{absA, absB}, OllamaLibraryPath()); diff != "" {
+			t.Errorf("OllamaLibraryPath() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("relative entries are skipped", func(t *testing.T) {
+		t.Setenv("OLLAMA_ALLOW_EXTERNAL_LIBRARY_PATH", "1")
+		t.Setenv("OLLAMA_LIBRARY_PATH", filepath.Join("relative", "dir")+sep+absA)
+		if diff := cmp.Diff([]string{absA}, OllamaLibraryPath()); diff != "" {
+			t.Errorf("OllamaLibraryPath() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("empty when allowed but unset", func(t *testing.T) {
+		t.Setenv("OLLAMA_ALLOW_EXTERNAL_LIBRARY_PATH", "1")
+		t.Setenv("OLLAMA_LIBRARY_PATH", "")
+		if got := OllamaLibraryPath(); got != nil {
+			t.Errorf("OllamaLibraryPath() = %v, want nil", got)
+		}
+	})
+}
